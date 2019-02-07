@@ -1,0 +1,599 @@
+---
+title: "Lab 1 TDDE01"
+author: "Filip Cornell"
+date: '2018-11-12'
+output: 
+  pdf_document:
+    number_sections: true
+header-includes:
+  - \usepackage{bbm}
+---
+
+
+\section{Assignment 1}
+
+First, we initialize some functions and load the data.
+
+```{r init1, warning=FALSE}
+library(readxl)
+data = read_excel("spambase.xlsx")
+data$Spam = factor(data$Spam)
+# Ensure this is correct when online again
+log_reg = function(data, fitModel, pLimit = 0.5) {
+  # Specify response in predict,
+  fits = predict(fitModel, data)
+  
+  probabilities = fits
+  
+  classifications = apply(as.matrix(probabilities), 1, function(row) {
+    if (row > pLimit) {
+      return(1)
+    } else {
+      return(0)
+    }
+  })
+  return(classifications)
+}
+
+classificationRate = function(confMatrix) {
+  return(sum(diag(confMatrix))/sum(confMatrix))
+}
+```
+
+\subsection{Task 1}
+
+Loading in the data and setting the seed and dividing it into training and test sets is a trivial task. 
+
+```{r task1Ass1}
+# Task 1
+n=dim(data)[1]
+set.seed(12345)
+id=sample(1:n, floor(n*0.5))
+train=data[id,]
+test=data[-id,] 
+
+
+```
+
+\subsection{Task 2}
+
+In this task, our mission was to classify the spam using logistic regression and report the confusion matrices, which can be found in the output below. 
+
+```{r task2Ass1}
+
+#Task 2
+
+fit = glm(Spam ~ ., data = train, family = "binomial")
+#summary(fit)
+fits = predict(fit, train)
+classificationsTrain = log_reg(train, fit)
+classificationsTest = log_reg(test, fit)
+
+print("misclassification rate train")
+table(train$Spam, classificationsTrain)
+1 - classificationRate(table(train$Spam, classificationsTrain))
+print("misclassification rate test")
+table(test$Spam, classificationsTest)
+1 - classificationRate(table(test$Spam, classificationsTest))
+
+```
+
+We get an accuracy of 83 % on the training set, and a test set accuracy of 81 %. This is quite a good accuracy, although not perfect. However, they are very alike, indicating that it is probably not overfitted. 
+
+\subsection{Task 3}
+
+In task 3, we changed the classification probability to ensuring it has 0.9 as probability to be 1 to be classified as 1. 
+
+```{r task3Ass1}
+
+## Task 3
+
+classificationsTrain = log_reg(train, fit, pLimit = 0.9)
+classificationsTest = log_reg(test, fit, pLimit = 0.9)
+
+print("misclassification rate train")
+table(train$Spam, classificationsTrain)
+1 - classificationRate(table(train$Spam, classificationsTrain))
+print("misclassification rate test")
+table(test$Spam, classificationsTest)
+1 - classificationRate(table(test$Spam, classificationsTest))
+
+
+```
+
+We see that the results are slightly worse, although not much worse. This is because some data points that lies within the interval $0.5 < p \leq 0.9$ are classified incorrectly, as they most likely actually are 1. However, the stricter rule prohibits these from being classified correctly, thus yield more false negatives. 
+
+\subsection{Task 4}
+Here, the task was to use the standard classifier \verb|kknn()| with K = 30. The misclassification rate here is higher, indicating that logistic regression is probably a better classification method in this case. 
+
+
+```{r task4Ass1}
+# Task 4 
+#install.packages("kknn")
+library("kknn")
+
+
+kkn.fit = kknn(Spam ~., train = train, test = train, k = 30)
+
+print("misclassification rate train")
+table(train$Spam, kkn.fit$fitted.values)
+1 - classificationRate(table(train$Spam, kkn.fit$fitted.values))
+
+
+kkn.fit = kknn(Spam ~., train = train, test = test, k = 30)
+
+print("misclassification rate test")
+table(test$Spam, kkn.fit$fitted.values)
+1 - classificationRate(table(test$Spam, kkn.fit$fitted.values))
+
+```
+
+\subsection{Task 5}
+
+Changing to K = 1 worsened the results, yielding a slightly higher, although not very different, misclassification rate. We get more false positives than before. 
+
+```{r task5Ass1}
+
+# Task 5
+
+kkn.fit = kknn(Spam ~., train, train, k = 1)
+
+print("misclassification rate train")
+table(train$Spam, kkn.fit$fitted.values)
+1 - classificationRate(table(train$Spam, kkn.fit$fitted.values))
+
+kkn.fit = kknn(Spam ~., train, test, k = 1)
+
+print("misclassification rate test")
+table(test$Spam, kkn.fit$fitted.values)
+1 - classificationRate(table(test$Spam, kkn.fit$fitted.values))
+
+
+```
+We clearly overfit on the training data with K = 1, yielding a worse result on the test data. 
+
+\section{Assignment 2}
+
+\subsection{Task 1}
+
+First, we import the data. 
+
+```{r task1Ass2}
+# Task 1
+library(readxl)
+data = read_excel("machines.xlsx")
+
+
+```
+
+\subsection{Task 2}
+
+Here, the task was to compute the log likelihood of $p(x|\theta) = \theta e^{-\theta x}$. The likelihood can be described as  which can be described as 
+
+$$\sum_{i=1}^n log\big(p(x_i|\theta)\big) = \sum_{i=1}^n log\big(\theta e^{-\theta x_i}\big) = \sum_{i=1}^n log\big(\theta\big) - \theta x_i = nlog(\theta) - \theta\sum_{i=1}^nx_i$$
+This results in the plot given below. 
+```{r task2Ass2}
+# Task 2
+
+logLikelihood = function(theta, data) {
+  return(sum(log(theta) - theta*data))
+}
+
+normalize = function(scale, probs) {
+  return(scale*probs/sum(probs))
+}
+
+thetaGrid = seq(0,max(data), length = 1000)
+scale = 1/(thetaGrid[2] - thetaGrid[1])
+logProbs = apply(as.matrix(thetaGrid), 1, logLikelihood, data)
+
+probsNormalizedTask2 = normalize(scale, exp(logProbs))
+plot(x = thetaGrid, y = logProbs, 
+     type = "l", lwd = 3, 
+     xlab = expression(theta), 
+     main = "Task 2 and 3 - maximum likelihood", ylab = "log probabilities", ylim = c(-500,0))
+plot(x = thetaGrid, y = probsNormalizedTask2, 
+     type = "l", lwd = 3, 
+     xlab = expression(theta), 
+     main = "Task 2 maximum likelihood", 
+     ylab = "Probabilities")
+maxTheta = thetaGrid[which.max(probsNormalizedTask2)]
+print(paste("Max value of theta is ", maxTheta))
+
+```
+
+We also see that the most likely value of $\theta$ is around 1.128. 
+
+\subsection{Task 3}
+
+In task 3, we use fewer observations, but use the maximum likelihood function just as before. 
+
+```{r task3Ass2}
+
+# Task 3 
+cutData = data$Length[1:6]
+logProbsTask3 = apply(as.matrix(thetaGrid), 1, logLikelihood, cutData)
+probsNormalizedTask3 = normalize(scale, exp(logProbsTask3))
+
+plot(x = thetaGrid, y = logProbs, 
+     type = "l", lwd = 3, 
+     xlab = expression(theta), 
+     main = "Task 2 and 3 - maximum likelihood", ylab = "log probabilities", ylim = c(-500,0))
+lines(x= thetaGrid, y = logProbsTask3, type = "l", lwd = 3, col = "green")
+
+legend("bottomright",
+       lty = rep(1,2), 
+       col = c("black", "green"), 
+       lwd = c(3,3), 
+       legend = c(              expression(paste("p(",x[1:48],"|",theta,")")),
+                  expression(paste("p(",x[1:6],"|",theta,")")))
+       )
+
+
+plot(x = thetaGrid, y = probsNormalizedTask2, 
+     type = "l", lwd = 3, 
+     xlab = expression(theta), 
+     main = "Task 2 and 3 - maximum likelihood", ylab = "Probabilities")
+lines(x= thetaGrid, y = probsNormalizedTask3, type = "l", lwd = 3, col = "green")
+
+legend("topright",
+       lty = rep(1,2), 
+       col = c("black", "green"), 
+       lwd = c(3,3), 
+       legend = c(              expression(paste("p(",x[1:48],"|",theta,")")),
+                  expression(paste("p(",x[1:6],"|",theta,")")))
+       )
+
+```
+
+This yields a distribution around a different value of $\theta$, with a lower probability. This is because we have fewer observation, and we can thus not be as sure as in task 2. 
+
+\subsection{Task 4}
+
+In task 4, we want to use a prior $p(\theta) = \lambda e^{-\lambda \theta}$, in other words, that $\theta$ also follows an exponential distribution. With this and the maximum likelihood function, we create the posterior distribution $l(\theta)$ and obtain a new distribution for $\theta$
+
+```{r task4Ass2}
+# Task 4
+
+
+l_theta = function(theta, data, lambda = 10) {
+  
+  
+  log_dpois = log(lambda*exp(-lambda*theta))
+  return(logLikelihood(theta, data) + log_dpois)
+}
+
+logProbsTask4 = apply(as.matrix(thetaGrid), 1, l_theta, data)
+
+probsNormalizedTask4 = normalize(scale, exp(logProbsTask4))
+
+plot(x = thetaGrid, y = logProbsTask4, 
+     type = "l", col = "red", 
+     lwd = 3, xlab = expression(theta), 
+     main = "Task 2 and 3 - maximum likelihood", ylab = "Log probabilites",
+     ylim = c(-500,0))
+lines(x=thetaGrid, y = logProbs, lwd = 3)
+lines(x= thetaGrid, y = logProbsTask3, type = "l", lwd = 3, col = "green")
+
+legend("bottomright",
+       lty = rep(1,3), 
+       col = c("red", "black", "green"), 
+       lwd = c(3,3,3), 
+       legend = c(expression(paste("l(",theta,")")),
+                  expression(paste("p(",x[1:48],"|",theta,")")),
+                  expression(paste("p(",x[1:6],"|",theta,")")))
+       )
+
+plot(x = thetaGrid, y = probsNormalizedTask4, 
+     type = "l", col = "red", 
+     lwd = 3, xlab = expression(theta), 
+     main = "Task 2 and 3 - maximum likelihood", ylab = "Probabilities")
+lines(x=thetaGrid, y = probsNormalizedTask2, lwd = 3)
+lines(x= thetaGrid, y = probsNormalizedTask3, type = "l", lwd = 3, col = "green")
+
+legend("topright",
+       lty = rep(1,3), 
+       col = c("red", "black", "green"), 
+       lwd = c(3,3,3), 
+       legend = c(expression(paste("l(",theta,")")),
+                  expression(paste("p(",x[1:48],"|",theta,")")),
+                  expression(paste("p(",x[1:6],"|",theta,")")))
+       )
+
+```
+
+This is has an even higher probability to be true. Do note that these are not completely correctly normalized, but the relation between the three is correct. 
+
+\subsection{Task 5}
+
+In this task, we were supposed to simulate some observations from $p(x|\theta) = \theta e^{-\theta x}$. Since this is an exponential distribution, we can simply generate sample from the built-in function \verb|rexp()| in R. 
+
+```{r task5Ass2}
+
+# TASK 5 
+
+# here we use maxTheta
+
+sims = rexp(n=50, rate=maxTheta)
+
+par(mfrow=c(2,1))
+hist(sims, main = "Simulations", 
+     col = "blue", xlim = c(0,5), 
+     ylim = c(0,20), xlab = "Simulations")
+hist(data$Length, main = "Actual values", 
+     col = "green", xlim = c(0,5), 
+     ylim = c(0,20), xlab = "Actual length values")
+par(mfrow=c(1,1))
+```
+
+We can see that the actual values and the simulated values follows a similar distribution. This would be clearer with more samples, but is still quite clear with only 50 samples for each. 
+
+\section{Assignment 4}
+
+\subsection{Task 1 - Plotting}
+
+Plotting the protein versus the moisture clearly shows that the relation between these can be described well using a linear model. 
+
+
+```{r task1Ass4}
+# Task 1
+library(readxl)
+data = read_excel("tecator.xlsx")
+
+plot(x=data$Moisture, y = data$Protein, 
+     xlab = "Moisture", 
+     ylab = "Protein", 
+     main = "Comparison protein and moisture")
+
+```
+\subsection{Task 2 - Describing a probabilistic model}
+
+In this task, we are supposed to describe a probabilistic model that describes $M_i$. This can be described as
+
+Here, it is appropriate to use the MSE criterion, since . The MSE criterion can be described as
+
+$$MSE = \frac{1}{N}\sum_{i=1}^N (y_i - \hat{y}_i)^2$$
+
+and it is appropriate to use for linear regression, since it comes from the maximum likelihood function if the error is normally distributed, which it is, according to instructions in this case. 
+
+To be able to describe different probabilistic models $M_i \quad \forall i \in \{1,..,6\}$ I created a few functions to be able to generate these models. The models can mathematically be described as 
+
+$$M_i =  \Bigg\{y_m = \sum_{j=0}^i \beta_0x^j + \varepsilon, \quad \varepsilon \sim N(0, \sigma^2) \quad \forall m \in \{1,..,m\} \Bigg\}$$
+where $m$ is the number of datapoints.
+
+```{r task2Ass4}
+# Task 2 
+
+prob_model = function(train, test, i) {
+  n_train = length(train$Moisture)
+  x_train = train$Moisture
+  X_train = matrix(c(x_train, 
+                     x_train^2, 
+                     x_train^3, 
+                     x_train^4, 
+                     x_train^5, 
+                     x_train^6), 
+                   nrow = n_train, ncol = 6)
+  
+  
+  n_test = length(test$Moisture)
+  x_test = test$Moisture
+  X_test = matrix(c(x_test, 
+                    x_test^2, 
+                    x_test^3, 
+                    x_test^4, 
+                    x_test^5, 
+                    x_test^6), 
+                  nrow = n_test, ncol = 6)
+  
+  if (i != 6) {
+    X_train = X_train[,-((i+1):7)]
+    X_test = X_test[,-((i+1):7)]
+  }
+  
+  
+  y_train = train$Protein
+  y_test = test$Protein
+  
+  
+  
+  return(list(y_train,X_train, y_test, X_test))
+  #return misclassification rate and confusion matrix 
+  
+  
+  
+}
+
+MSE = function(y, y_hat) {
+  n = length(y)
+  return((1/n)*sum((y - y_hat)^2))
+}
+
+convert_to_poly = function(x, i) {
+  n = length(x)
+  x_matrix = matrix(c(rep(1,n), x, x^2, x^3, x^4, x^5, x^6), nrow = n, ncol = 7)
+  
+  if (i != 6) {
+    x_matrix = x_matrix[,-((i+2):7)]
+  }
+    
+  
+  return(x_matrix)
+}
+
+```
+
+\subsection{Task 3}
+
+In this task, we use the functions created previously to generate the models and get their MSEs for the training and the data set. 
+
+```{r task3Ass4}
+plot(x=data$Protein, y = data$Moisture, 
+     xlab = "Protein", 
+     ylab = "Moisture", 
+     main = "Comparison protein and moisture")
+# Task 3 
+# Copying from Assignment 1
+n=dim(data)[1]
+set.seed(1)
+id=sample(1:n, floor(n*0.5))
+train=data[id,]
+test=data[-id,] 
+
+
+MSE_vals = matrix(NA, nrow = 6, ncol = 2)
+rownames(MSE_vals) = seq(1,6,1)
+colnames(MSE_vals) = c("Training MSE", "Test MSE")
+
+
+x_seq = seq(min(data$Moisture), max(data$Moisture), length = 1000)
+colors = c("red", "blue", "green", "black", "purple", "yellow")
+for (i in 1:6) {
+  print(i)
+  Model = prob_model(train, test, i)
+  y_train = Model[[1]]
+  X_train = data.frame(Model[[2]])
+  y_test = Model[[3]]
+  X_test = data.frame(Model[[4]])
+  if (i == 1) {
+    names(X_test) = c("Model..2..")  
+  }
+  
+  
+  lm.fit = lm(y_train ~., data = X_train)
+  trainPredict = predict(lm.fit, X_train)
+  testPredict = predict(lm.fit, X_test)
+  
+  betas = lm.fit$coefficients
+  
+  
+  x_matrix = convert_to_poly(x_seq, i)
+  
+  
+  
+  lines(x=x_seq, y = t(as.matrix(betas))%*%t(x_matrix), col = colors[i], lwd = 2)
+  MSE_vals[i, 1] = MSE(train$Protein ,trainPredict)
+  MSE_vals[i, 2] = MSE(test$Protein, testPredict)
+}
+
+legend("topleft",
+       lty = rep(1,6), 
+       col = colors, 
+       lwd = c(2,2,2,2,2,2), 
+       legend = c("Model 1", 
+                  "Model 2",
+                  "Model 3", 
+                  "Model 4", 
+                  "Model 5", 
+                  "Model 6"))
+
+plot(x=seq(1,6,1), y = MSE_vals[,1], 
+     col = "green", 
+     type = "l", 
+     xlab = "Model", 
+     ylab = "MSE", 
+     lwd = 3,
+     main = "Training MSE", ylim = c(2.3, max(MSE_vals)))
+lines(x=seq(1,6,1), y = MSE_vals[,2], 
+     col = "blue", 
+     lwd = 3,
+     xlab = "Model", 
+     ylab = "MSE", 
+     main = "Test MSE")
+legend("bottomleft",
+       lty = rep(1,6), 
+       col = c("green", "blue"), 
+       lwd = c(3,3), 
+       legend = c("Training MSE", 
+                  "Test MSE"))
+
+```
+
+We clearly see that with a higher polynomial degree, we manage to fit the data better. However, the test set does not necessarily improve, but rather do not follow a clear pattern. Depending on which seed one sets, the MSE results varies, but it does not necessarily improve with higher polynomials. This is because the more polynomials we have, we risk having a greater bias towards the training data. 
+
+\subsection{Task 4}
+
+In task 4, we use variable selection using \verb|stepAIC()|. 
+
+```{r task4Ass4, echo=TRUE, results='hide'}
+#Task 4 - use entire data set.
+
+# Perform variable selection of a linear model 
+# in which fat is a response and Channel1-Channel100 are predictors. 
+# Comment on how many variables were selected. 
+
+library(MASS)
+dataToUse = data
+#Remove protein and
+dataToUse$Protein = NULL
+dataToUse$Moisture = NULL
+dataToUse$Sample = NULL
+lm.fit = lm(Fat ~ ., data = dataToUse)
+
+step = stepAIC(lm.fit, direction = "both")
+
+nrVarsChosen = length(step$coefficients)
+
+```
+
+Printing the number of variables chosen, we get that 64 variables have been chosen. This is quite a high number, but we managed to at least remove $\frac{1}{3}$ of the variables using the variable selection. 
+
+```{r task4Ass4P2}
+print(nrVarsChosen)
+```
+
+\subsection{Task 5}
+
+Using the model retrieved through \verb|stepAIC()|, we do a ridge regression. 
+
+
+```{r task5Ass4}
+
+# Task 5 - ridge regression
+library(glmnet)
+
+variablesSelected = names(step$coefficients)
+variablesSelected = variablesSelected[-c(1)]
+dataSteps = dataToUse[,variablesSelected]
+dataSteps = scale(dataSteps)
+response = scale(dataToUse$Fat)
+ridgeRegModel = glmnet(as.matrix(dataSteps), response, alpha = 0, family="gaussian")
+plot(ridgeRegModel, xvar="lambda", label=TRUE)
+```
+
+We can clearly that the coefficients are minimized, tending towards 0 the more we regularize. This is because the regularization makes them affect less, limiting their possibility to overfit. 
+
+\subsection{Task 6}
+
+In task 6, we fit a LASSO regression instead of Ridge regression. 
+
+```{r task6Ass4}
+
+# Task 6 - Lasso regression
+#Here, alpha = 1 instead
+lassoModel = glmnet(as.matrix(dataSteps), response, alpha = 1, family="gaussian")
+plot(lassoModel, xvar="lambda", label=TRUE)
+
+```
+
+We see here as well that LASSO regression also makes the variables 
+\subsection{Task 7}
+
+Here, we use the LASSO model combined with cross-validation, to see whether we can reduce the number of variables.
+
+```{r task7Ass4}
+# Task 7 - use cross-validation to find the optimal lasso model
+
+lambda = seq(0,2, length = 1000)
+lassoCVModel = cv.glmnet(as.matrix(dataSteps), response, lambda = lambda, alpha = 1, family="gaussian")
+lassoCVModel$lambda.min
+plot(lassoCVModel)
+coef(lassoCVModel, s = "lambda.min")
+
+```
+
+The LASSO model manages to reduce the variables to only 11, compared to 64 by \verb|stepAIC|. 
+\subsection{Task 8}
+
+While we saw that \verb|stepAIC| reduced the number of variables to 64, LASSO combined with cross-validation managed to reduce it to only 11, indicating that the LASSO with crossvalidation is better at reducing the number of features. 
+
